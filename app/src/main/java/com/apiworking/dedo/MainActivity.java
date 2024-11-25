@@ -4,10 +4,12 @@ import android.Manifest;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Base64;
 import android.util.Log;
@@ -31,6 +33,8 @@ import com.zkteco.android.biometric.module.fingerprintreader.FingerprintSensor;
 import com.zkteco.android.biometric.module.fingerprintreader.FingprintFactory;
 import com.zkteco.android.biometric.module.fingerprintreader.ZKFingerService;
 import com.zkteco.android.biometric.module.fingerprintreader.exception.FingerprintException;
+
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -116,10 +120,25 @@ public class MainActivity extends AppCompatActivity {
         if (ret > 0) {
             String strRes[] = new String(bufids).split("\t");
             setResult("identify succ, userid:" + strRes[0].trim() + ", score:" + strRes[1].trim());
+            ftouch(strRes[0].trim());
+//            Toast.makeText(getApplicationContext(), "EUREKA !! " + strRes[0].trim(), Toast.LENGTH_SHORT).show();
+
         } else {
             setResult("identify fail, ret=" + ret);
         }
     }
+
+    private void ftouch(String texto){
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(getApplicationContext(), "EUREKA !! " + texto, Toast.LENGTH_SHORT).show();
+            }
+        });
+
+    }
+
+
 
 
     private FingerprintCaptureListener fingerprintCaptureListener = new FingerprintCaptureListener() {
@@ -250,6 +269,67 @@ public class MainActivity extends AppCompatActivity {
         checkStoragePermission();
         zkusbManager = new ZKUSBManager(this.getApplicationContext(), zkusbManagerListener);
         zkusbManager.registerUSBPermissionReceiver();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleIncomingIntent(intent);
+    }
+
+    private void handleIncomingIntent(Intent intent) {
+        Uri uri = intent.getData();
+        if (uri != null) {
+            String scheme = uri.getScheme();
+            String path = uri.getPath();
+            if ("dedo".equals(scheme)) {
+                switch (path) {
+                    case "/nuevo": {
+                        String encodedJson = uri.getQueryParameter("data");
+                        if (encodedJson != null) {
+                            String decodedJson = Uri.decode(encodedJson);
+                            Log.i("JSON", "JSON received: " + decodedJson);
+                            try {
+                                JSONObject jsonData = new JSONObject(decodedJson);
+                                String nombre = jsonData.optString("nombre", "");
+                                String codigo = jsonData.optString("codigo", "");
+                                String onok = jsonData.optString("onok", "");
+                                String onerror = jsonData.optString("onerror", "");
+                                Log.i("Nuevo", "Nombre: " + nombre + ", Codigo: " + codigo);
+                                Log.i("Nuevo", "OnOk: " + onok + ", OnError: " + onerror);
+                                 openDevice();
+                                botonRegisterLogic(nombre);
+                            } catch (Exception e) {
+                                Log.e("Nuevo", "Error parsing JSON", e);
+                            }
+                        }
+                    }
+                    break;
+
+                    case "/leer": {
+                        String encodedJson = uri.getQueryParameter("data");
+                        if (encodedJson != null) {
+                            String decodedJson = Uri.decode(encodedJson);
+                            Log.i("JSON", "JSON received: " + decodedJson);
+                            try {
+                                JSONObject jsonData = new JSONObject(decodedJson);
+                                String onok = jsonData.optString("onok", "");
+                                String onerror = jsonData.optString("onerror", "");
+                                Log.i("Leer", "OnOk: " + onok + ", OnError: " + onerror);
+                                // Procesa la lógica adicional aquí para /leer
+                            } catch (Exception e) {
+                                Log.e("Leer", "Error parsing JSON", e);
+                            }
+                        }
+                    }
+                    break;
+
+                    default:
+                        Log.e("DeepLink", "Unknown path: " + path);
+                        break;
+                }
+            }
+        }
     }
 
 
@@ -392,6 +472,10 @@ public class MainActivity extends AppCompatActivity {
 
     public void onBnRegister(View view)
     {
+        botonRegisterLogic("");
+    }
+
+    private void botonRegisterLogic(String nombre){
         if (bStarted) {
             strUid = editText.getText().toString();
             if (null == strUid || strUid.isEmpty()) {
@@ -401,7 +485,7 @@ public class MainActivity extends AppCompatActivity {
             }
             if (dbManager.isUserExited(strUid)) {
                 bRegister = false;
-                textView.setText("The user[" + strUid + "] had registered!");
+                textView.setText("The user[" + nombre + "] had registered!");
                 return;
             }
             bRegister = true;
@@ -414,6 +498,10 @@ public class MainActivity extends AppCompatActivity {
 
     public void onBnIdentify(View view)
     {
+        btnLogicIdentifiy();
+    }
+
+    private void btnLogicIdentifiy(){
         if (bStarted) {
             bRegister = false;
             enroll_index = 0;
@@ -421,6 +509,7 @@ public class MainActivity extends AppCompatActivity {
             textView.setText("Please start capture first");
         }
     }
+
 
     private void setResult(String result)
     {
